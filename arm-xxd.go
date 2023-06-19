@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
 )
 
 const bytesPerLine = 12 // For -i option, 12 bytes per line is common
@@ -32,40 +34,27 @@ func main() {
 		reader = bufio.NewReader(os.Stdin)
 	}
 
+	var count int
+	var varName string = "data"
 	if *includeflag {
-		fmt.Print("unsigned char data[] = {")
+		if filename != "" {
+			varName = sanitize(filepath.Base(filename))
+		}
+		fmt.Printf("const unsigned char %s[] = {", varName)
 	}
-	var offset int64 = 0
+
 	for {
 		buf := make([]byte, bytesPerLine)
 		n, err := reader.Read(buf)
 		if n > 0 {
 			if *includeflag {
 				for i := 0; i < n; i++ {
-					if offset%bytesPerLine == 0 {
+					if count%bytesPerLine == 0 {
 						fmt.Print("\n  ")
 					}
 					fmt.Printf("0x%02x, ", buf[i])
-					offset++
+					count++
 				}
-			} else {
-				fmt.Printf("%08x: ", offset)
-				for i := 0; i < n; i++ {
-					fmt.Printf("%02x ", buf[i])
-				}
-				for i := n; i < bytesPerLine; i++ {
-					fmt.Print("   ")
-				}
-				fmt.Print(" ")
-				for i := 0; i < n; i++ {
-					if buf[i] >= 32 && buf[i] < 127 {
-						fmt.Printf("%c", buf[i])
-					} else {
-						fmt.Print(".")
-					}
-				}
-				fmt.Print("\n")
-				offset += int64(n)
 			}
 		}
 		if err != nil {
@@ -73,6 +62,12 @@ func main() {
 		}
 	}
 	if *includeflag {
-		fmt.Print("\n};")
+		fmt.Printf("\n};\nconst unsigned int %s_len = %d;\n", varName, count)
 	}
+}
+
+func sanitize(name string) string {
+	reg, _ := regexp.Compile("[^a-zA-Z0-9]+")
+	sanitizedName := reg.ReplaceAllString(name, "_")
+	return sanitizedName
 }
